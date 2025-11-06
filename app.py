@@ -7,6 +7,79 @@ import json
 app = Flask(__name__)
 CORS(app)
 
+def obtener_subtitulos_directo(video_id):
+    """Obtiene subtítulos directamente sin usar yt-dlp"""
+    import requests
+    import xml.etree.ElementTree as ET
+    
+    # URL de la API de subtítulos de YouTube
+    base_url = "https://www.youtube.com/api/timedtext"
+    
+    # Primero, obtiene la lista de idiomas disponibles
+    params = {
+        'v': video_id,
+        'type': 'list'
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'es-ES,es;q=0.9'
+    }
+    
+    try:
+        # Lista de idiomas
+        response = requests.get(base_url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return None, None, None
+        
+        # Parsea XML de idiomas disponibles
+        root = ET.fromstring(response.text)
+        
+        # Busca español
+        idiomas_espanol = ['es', 'es-ES', 'es-MX', 'es-419']
+        lang_code = None
+        lang_name = None
+        
+        for track in root.findall('.//track'):
+            lang = track.get('lang_code', '')
+            if lang in idiomas_espanol:
+                lang_code = lang
+                lang_name = track.get('name', 'Español')
+                break
+        
+        if not lang_code:
+            return None, None, None
+        
+        # Descarga los subtítulos en ese idioma
+        params = {
+            'v': video_id,
+            'lang': lang_code,
+            'fmt': 'srv3'  # Formato XML simple
+        }
+        
+        response = requests.get(base_url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return None, None, None
+        
+        # Parsea el XML de subtítulos
+        root = ET.fromstring(response.text)
+        textos = []
+        
+        for text_elem in root.findall('.//text'):
+            texto = text_elem.text
+            if texto:
+                textos.append(texto.strip())
+        
+        texto_completo = ' '.join(textos)
+        
+        return texto_completo, lang_code, lang_name
+        
+    except Exception as e:
+        print(f"❌ Error en obtener_subtitulos_directo: {e}")
+        return None, None, None
+
 @app.route('/')
 def inicio():
     return jsonify({
@@ -142,7 +215,42 @@ def obtener_transcripcion():
     
     try:
         print(f"📹 Obteniendo transcripción de: {video_id}")
+        @app.route('/transcript')
+def obtener_transcripcion():
+    video_id = request.args.get('video_id')
+    
+    if not video_id:
+        return jsonify({
+            'exito': False,
+            'error': 'Necesitas proporcionar un video_id'
+        }), 400
+    
+    try:
+        print(f"📹 Obteniendo transcripción de: {video_id}")
         
+        # <<<< AÑADE AQUÍ ESTAS LÍNEAS >>>>
+        
+        # Intenta método directo primero
+        print("🔄 Intentando método directo de API...")
+        texto_directo, idioma, nombre_idioma = obtener_subtitulos_directo(video_id)
+        
+        if texto_directo and len(texto_directo) > 50:
+            print(f"✅ Subtítulos obtenidos directamente: {len(texto_directo)} caracteres")
+            return jsonify({
+                'exito': True,
+                'video_id': video_id,
+                'transcripcion': texto_directo,
+                'total_caracteres': len(texto_directo),
+                'tipo_subtitulos': 'API directa',
+                'idioma': idioma,
+                'metodo': 'youtube_api_timedtext'
+            })
+        
+        print("⚠️ Método directo falló, intentando con yt-dlp...")
+        
+        # <<<< FIN DE LAS LÍNEAS NUEVAS >>>>
+        
+        # Aquí continúa el código que ya tenías (url = f"https://www.youtube.com...")
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         # Configuración mejorada para Railway
