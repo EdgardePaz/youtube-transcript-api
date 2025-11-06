@@ -83,18 +83,22 @@ def obtener_subtitulos_directo(video_id):
 def obtener_subtitulos_rapidapi(video_id):
     """Obtiene subtítulos usando RapidAPI"""
     import requests
+    import os
     
-    # URL CORRECTA según tu captura
+    # Obtener API Key de variable de entorno o usar la hardcodeada
+    api_key = os.environ.get('RAPIDAPI_KEY', '4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8')
+    
     url = "https://youtube-transcript3.p.rapidapi.com/api/transcript"
     
+    # CAMBIO IMPORTANTE: videoId en lugar de video_id
     querystring = {
-        "video_id": video_id,
+        "videoId": video_id,  # <-- CAMBIADO AQUÍ
         "lang": "es"
     }
     
     headers = {
-        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # Tu API Key
-        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"  # Host correcto
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"
     }
     
     try:
@@ -105,10 +109,15 @@ def obtener_subtitulos_rapidapi(video_id):
         response = requests.get(url, headers=headers, params=querystring, timeout=30)
         
         print(f"📡 Código de respuesta: {response.status_code}")
-        print(f"📄 Respuesta: {response.text[:500]}...")  # Más caracteres para debug
+        print(f"📄 Respuesta: {response.text[:500]}...")
         
         if response.status_code == 200:
             data = response.json()
+            
+            # Verifica si la respuesta fue exitosa
+            if isinstance(data, dict) and data.get('success') == False:
+                print(f"❌ API respondió con error: {data.get('error')}")
+                return None, None, None
             
             # Imprime la estructura para ver qué formato tiene
             print(f"🔍 Estructura de datos: {type(data)}")
@@ -134,19 +143,25 @@ def obtener_subtitulos_rapidapi(video_id):
                 elif 'text' in data:
                     texto_completo = data['text']
                 
-                # Formato 4: Diccionario con 'captions'
-                elif 'captions' in data:
-                    if isinstance(data['captions'], str):
-                        texto_completo = data['captions']
-                    elif isinstance(data['captions'], list):
-                        texto_completo = ' '.join([item.get('text', '') for item in data['captions']])
+                # Formato 4: Diccionario con 'data'
+                elif 'data' in data:
+                    if isinstance(data['data'], str):
+                        texto_completo = data['data']
+                    elif isinstance(data['data'], list):
+                        texto_completo = ' '.join([item.get('text', '') for item in data['data']])
                 
-                # Formato 5: Buscar cualquier clave que contenga texto
+                # Formato 5: Buscar cualquier clave que contenga texto largo
                 else:
                     for key, value in data.items():
                         if isinstance(value, str) and len(value) > 100:
                             texto_completo = value
                             break
+                        elif isinstance(value, list) and len(value) > 0:
+                            # Intenta extraer texto de la lista
+                            posible_texto = ' '.join([str(item.get('text', '')) for item in value if isinstance(item, dict)])
+                            if len(posible_texto) > 100:
+                                texto_completo = posible_texto
+                                break
             
             if texto_completo and len(texto_completo) > 50:
                 print(f"✅ Texto extraído: {len(texto_completo)} caracteres")
@@ -156,16 +171,6 @@ def obtener_subtitulos_rapidapi(video_id):
                 print(f"📄 Respuesta completa: {data}")
                 return None, None, None
         
-        elif response.status_code == 400:
-            print(f"❌ Error 400: Solicitud incorrecta - {response.text}")
-        elif response.status_code == 401:
-            print(f"❌ Error 401: API Key inválida")
-        elif response.status_code == 403:
-            print(f"❌ Error 403: Acceso denegado - Verifica tu suscripción")
-        elif response.status_code == 404:
-            print(f"❌ Error 404: Video no encontrado o sin subtítulos")
-        elif response.status_code == 429:
-            print(f"❌ Error 429: Límite de peticiones excedido")
         else:
             print(f"❌ Error {response.status_code}: {response.text}")
         
