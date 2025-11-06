@@ -181,7 +181,8 @@ def obtener_transcripcion():
         }), 500
 
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
     print("🚀 Servidor iniciando con yt-dlp...")
-    print("📍 Abre: http://localhost:5000")
-    print("🔍 Verifica idiomas: http://localhost:5000/check?video_id=XXX")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"📍 Puerto: {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
