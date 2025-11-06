@@ -79,6 +79,47 @@ def obtener_subtitulos_directo(video_id):
     except Exception as e:
         print(f"❌ Error en obtener_subtitulos_directo: {e}")
         return None, None, None
+    
+def obtener_subtitulos_rapidapi(video_id):
+    """Obtiene subtítulos usando RapidAPI"""
+    import requests
+    
+    url = "https://youtube-transcript3.p.rapidapi.com/transcript"
+    
+    querystring = {
+        "video_id": video_id,
+        "lang": "es"
+    }
+    
+    headers = {
+        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # <-- REEMPLAZA ESTO
+        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"
+    }
+    
+    try:
+        print("🌐 Intentando con RapidAPI...")
+        response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # El formato puede variar según el API
+            if 'transcript' in data:
+                # Une todo el texto
+                texto_completo = ' '.join([item.get('text', '') for item in data['transcript']])
+                return texto_completo, 'es', 'RapidAPI'
+            elif 'text' in data:
+                return data['text'], 'es', 'RapidAPI'
+            elif isinstance(data, list):
+                texto_completo = ' '.join([item.get('text', '') for item in data])
+                return texto_completo, 'es', 'RapidAPI'
+        
+        print(f"❌ RapidAPI respondió con código: {response.status_code}")
+        return None, None, None
+        
+    except Exception as e:
+        print(f"❌ Error con RapidAPI: {e}")
+        return None, None, None
 
 @app.route('/')
 def inicio():
@@ -215,10 +256,31 @@ def obtener_transcripcion():
     try:
         print(f"📹 Obteniendo transcripción de: {video_id}")
         
-        # Intenta método directo primero
+                # Intenta método directo primero
         print("🔄 Intentando método directo de API...")
         texto_directo, idioma, nombre_idioma = obtener_subtitulos_directo(video_id)
         
+        # Si el método directo detecta bloqueo de Google
+        if texto_directo and 'sorry' in texto_directo.lower():
+            print("⚠️ Google bloqueó el método directo, intentando RapidAPI...")
+            texto_directo = None
+        
+        # Si falló el método directo, intenta RapidAPI
+        if not texto_directo or len(texto_directo) < 50:
+            texto_rapid, idioma_rapid, metodo_rapid = obtener_subtitulos_rapidapi(video_id)
+            if texto_rapid and len(texto_rapid) > 50:
+                print(f"✅ Subtítulos obtenidos vía RapidAPI: {len(texto_rapid)} caracteres")
+                return jsonify({
+                    'exito': True,
+                    'video_id': video_id,
+                    'transcripcion': texto_rapid,
+                    'total_caracteres': len(texto_rapid),
+                    'tipo_subtitulos': 'API externa',
+                    'idioma': idioma_rapid,
+                    'metodo': metodo_rapid
+                })
+        
+        # Si el método directo funcionó
         if texto_directo and len(texto_directo) > 50:
             print(f"✅ Subtítulos obtenidos directamente: {len(texto_directo)} caracteres")
             return jsonify({
