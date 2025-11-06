@@ -203,7 +203,6 @@ def parsear_vtt(data):
         return None
 
 @app.route('/transcript')
-@app.route('/transcript')
 def obtener_transcripcion():
     video_id = request.args.get('video_id')
     
@@ -215,20 +214,6 @@ def obtener_transcripcion():
     
     try:
         print(f"📹 Obteniendo transcripción de: {video_id}")
-        @app.route('/transcript')
-def obtener_transcripcion():
-    video_id = request.args.get('video_id')
-    
-    if not video_id:
-        return jsonify({
-            'exito': False,
-            'error': 'Necesitas proporcionar un video_id'
-        }), 400
-    
-    try:
-        print(f"📹 Obteniendo transcripción de: {video_id}")
-        
-        # <<<< AÑADE AQUÍ ESTAS LÍNEAS >>>>
         
         # Intenta método directo primero
         print("🔄 Intentando método directo de API...")
@@ -248,9 +233,7 @@ def obtener_transcripcion():
         
         print("⚠️ Método directo falló, intentando con yt-dlp...")
         
-        # <<<< FIN DE LAS LÍNEAS NUEVAS >>>>
-        
-        # Aquí continúa el código que ya tenías (url = f"https://www.youtube.com...")
+        # Continúa con yt-dlp
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         # Configuración mejorada para Railway
@@ -259,7 +242,7 @@ def obtener_transcripcion():
             'writesubtitles': True,
             'writeautomaticsub': True,
             'subtitleslangs': ['es', 'es-ES', 'es-MX', 'es-419'],
-            'quiet': False,  # Mostrar más info en logs
+            'quiet': False,
             'no_warnings': False,
             'extractor_args': {
                 'youtube': {
@@ -290,7 +273,6 @@ def obtener_transcripcion():
             for lang in idiomas_espanol:
                 if lang in subtitulos_manuales:
                     print(f"✓ Encontrados subtítulos manuales en {lang}")
-                    # yt-dlp puede descargar directamente
                     try:
                         sub_list = subtitulos_manuales[lang]
                         # Busca el formato más fácil de parsear
