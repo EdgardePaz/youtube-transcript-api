@@ -84,6 +84,7 @@ def obtener_subtitulos_rapidapi(video_id):
     """Obtiene subtítulos usando RapidAPI"""
     import requests
     
+    # URL CORRECTA según tu captura
     url = "https://youtube-transcript3.p.rapidapi.com/api/transcript"
     
     querystring = {
@@ -92,8 +93,8 @@ def obtener_subtitulos_rapidapi(video_id):
     }
     
     headers = {
-        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # <-- REEMPLAZA CON TU API KEY
-        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"
+        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # Tu API Key
+        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"  # Host correcto
     }
     
     try:
@@ -104,27 +105,76 @@ def obtener_subtitulos_rapidapi(video_id):
         response = requests.get(url, headers=headers, params=querystring, timeout=30)
         
         print(f"📡 Código de respuesta: {response.status_code}")
-        print(f"📄 Respuesta: {response.text[:200]}...")
+        print(f"📄 Respuesta: {response.text[:500]}...")  # Más caracteres para debug
         
         if response.status_code == 200:
             data = response.json()
             
-            # El formato puede variar según el API
-            if 'transcript' in data:
-                # Une todo el texto
-                texto_completo = ' '.join([item.get('text', '') for item in data['transcript']])
+            # Imprime la estructura para ver qué formato tiene
+            print(f"🔍 Estructura de datos: {type(data)}")
+            if isinstance(data, dict):
+                print(f"🔑 Claves disponibles: {list(data.keys())}")
+            
+            # Intenta diferentes formatos de respuesta
+            texto_completo = None
+            
+            # Formato 1: Lista directa
+            if isinstance(data, list) and len(data) > 0:
+                texto_completo = ' '.join([item.get('text', '') for item in data if 'text' in item])
+            
+            # Formato 2: Diccionario con 'transcript'
+            elif isinstance(data, dict):
+                if 'transcript' in data:
+                    if isinstance(data['transcript'], str):
+                        texto_completo = data['transcript']
+                    elif isinstance(data['transcript'], list):
+                        texto_completo = ' '.join([item.get('text', '') for item in data['transcript']])
+                
+                # Formato 3: Diccionario con 'text'
+                elif 'text' in data:
+                    texto_completo = data['text']
+                
+                # Formato 4: Diccionario con 'captions'
+                elif 'captions' in data:
+                    if isinstance(data['captions'], str):
+                        texto_completo = data['captions']
+                    elif isinstance(data['captions'], list):
+                        texto_completo = ' '.join([item.get('text', '') for item in data['captions']])
+                
+                # Formato 5: Buscar cualquier clave que contenga texto
+                else:
+                    for key, value in data.items():
+                        if isinstance(value, str) and len(value) > 100:
+                            texto_completo = value
+                            break
+            
+            if texto_completo and len(texto_completo) > 50:
+                print(f"✅ Texto extraído: {len(texto_completo)} caracteres")
                 return texto_completo, 'es', 'RapidAPI'
-            elif 'text' in data:
-                return data['text'], 'es', 'RapidAPI'
-            elif isinstance(data, list):
-                texto_completo = ' '.join([item.get('text', '') for item in data])
-                return texto_completo, 'es', 'RapidAPI'
+            else:
+                print(f"❌ No se pudo extraer texto válido de la respuesta")
+                print(f"📄 Respuesta completa: {data}")
+                return None, None, None
         
-        print(f"❌ RapidAPI respondió con código: {response.status_code}")
+        elif response.status_code == 400:
+            print(f"❌ Error 400: Solicitud incorrecta - {response.text}")
+        elif response.status_code == 401:
+            print(f"❌ Error 401: API Key inválida")
+        elif response.status_code == 403:
+            print(f"❌ Error 403: Acceso denegado - Verifica tu suscripción")
+        elif response.status_code == 404:
+            print(f"❌ Error 404: Video no encontrado o sin subtítulos")
+        elif response.status_code == 429:
+            print(f"❌ Error 429: Límite de peticiones excedido")
+        else:
+            print(f"❌ Error {response.status_code}: {response.text}")
+        
         return None, None, None
         
     except Exception as e:
-        print(f"❌ Error con RapidAPI: {e}")
+        print(f"❌ Error con RapidAPI: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None, None, None
 
 @app.route('/')
