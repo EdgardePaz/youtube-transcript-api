@@ -130,6 +130,7 @@ def parsear_vtt(data):
         return None
 
 @app.route('/transcript')
+@app.route('/transcript')
 def obtener_transcripcion():
     video_id = request.args.get('video_id')
     
@@ -144,47 +145,90 @@ def obtener_transcripcion():
         
         url = f"https://www.youtube.com/watch?v={video_id}"
         
+        # Configuración mejorada para Railway
         ydl_opts = {
             'skip_download': True,
             'writesubtitles': True,
             'writeautomaticsub': True,
-            'quiet': True,
-            'no_warnings': True
+            'subtitleslangs': ['es', 'es-ES', 'es-MX', 'es-419'],
+            'quiet': False,  # Mostrar más info en logs
+            'no_warnings': False,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'skip': ['hls', 'dash']
+                }
+            }
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print("🔍 Extrayendo información del video...")
             info = ydl.extract_info(url, download=False)
             
             subtitulos_manuales = info.get('subtitles', {})
             subtitulos_auto = info.get('automatic_captions', {})
             
-            texto = None
+            print(f"📋 Subtítulos manuales disponibles: {list(subtitulos_manuales.keys())}")
+            print(f"📋 Subtítulos automáticos disponibles: {list(subtitulos_auto.keys())}")
+            
+            # Busca subtítulos en español
+            sub_data = None
             tipo = None
             idioma_usado = None
-            formato_usado = None
             
-            # Busca variantes de español
             idiomas_espanol = ['es', 'es-ES', 'es-MX', 'es-419', 'es-US']
             
             # Intenta manuales primero
-            sub_list = None
             for lang in idiomas_espanol:
                 if lang in subtitulos_manuales:
-                    sub_list = subtitulos_manuales[lang]
-                    tipo = 'manual'
-                    idioma_usado = lang
-                    break
-            
-            # Si no hay manuales, intenta automáticos
-            if not sub_list:
-                for lang in idiomas_espanol:
-                    if lang in subtitulos_auto:
-                        sub_list = subtitulos_auto[lang]
-                        tipo = 'automático'
+                    print(f"✓ Encontrados subtítulos manuales en {lang}")
+                    # yt-dlp puede descargar directamente
+                    try:
+                        sub_list = subtitulos_manuales[lang]
+                        # Busca el formato más fácil de parsear
+                        for sub_format in sub_list:
+                            if 'data' in sub_format:
+                                sub_data = sub_format['data']
+                                break
+                        
+                        if not sub_data:
+                            # Descarga manualmente
+                            import requests
+                            sub_url = sub_list[0]['url']
+                            response = requests.get(sub_url, timeout=30)
+                            sub_data = response.text
+                        
+                        tipo = 'manual'
                         idioma_usado = lang
                         break
+                    except Exception as e:
+                        print(f"⚠️ Error con subtítulos manuales {lang}: {e}")
+                        continue
             
-            if not sub_list:
+            # Si no hay manuales, intenta automáticos
+            if not sub_data:
+                for lang in idiomas_espanol:
+                    if lang in subtitulos_auto:
+                        print(f"✓ Encontrados subtítulos automáticos en {lang}")
+                        try:
+                            sub_list = subtitulos_auto[lang]
+                            
+                            if 'data' in sub_list[0]:
+                                sub_data = sub_list[0]['data']
+                            else:
+                                import requests
+                                sub_url = sub_list[0]['url']
+                                response = requests.get(sub_url, timeout=30)
+                                sub_data = response.text
+                            
+                            tipo = 'automático'
+                            idioma_usado = lang
+                            break
+                        except Exception as e:
+                            print(f"⚠️ Error con subtítulos automáticos {lang}: {e}")
+                            continue
+            
+            if not sub_data:
                 disponibles = list(subtitulos_manuales.keys()) + list(subtitulos_auto.keys())
                 return jsonify({
                     'exito': False,
@@ -193,93 +237,38 @@ def obtener_transcripcion():
                     'idiomas_disponibles': disponibles
                 }), 404
             
-            # Intenta diferentes formatos en orden de preferencia
-            formatos_preferencia = ['json3', 'srv3', 'vtt', 'ttml']
-            sub_url = None
+            print(f"📄 Datos de subtítulos descargados: {len(sub_data)} bytes")
             
-            for formato in formatos_preferencia:
-                for sub_formato in sub_list:
-                    if sub_formato.get('ext') == formato:
-                        sub_url = sub_formato['url']
-                        formato_usado = formato
-                        break
-                if sub_url:
-                    break
+            # Parsea el texto
+            texto = None
             
-            # Si no encontró formato específico, usa el primero disponible
-            if not sub_url and sub_list:
-                sub_url = sub_list[0]['url']
-                formato_usado = sub_list[0].get('ext', 'desconocido')
-            
-                                    # Descarga subtítulos con headers apropiados
-            import urllib.request
-            print(f"📥 Descargando subtítulos formato: {formato_usado}")
-            print(f"🔗 URL: {sub_url[:100]}...")
-            
-            # Añade headers para simular navegador
-            req = urllib.request.Request(
-                sub_url,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': '*/*',
-                    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                    'Referer': 'https://www.youtube.com/'
-                }
-            )
-            
-            try:
-                response = urllib.request.urlopen(req, timeout=30)
-                sub_data = response.read().decode('utf-8')
-            except Exception as download_error:
-                print(f"❌ Error descargando: {download_error}")
-                # Intenta con requests como alternativa
-                try:
-                    import requests
-                    response = requests.get(sub_url, timeout=30)
-                    sub_data = response.text
-                except:
-                    return jsonify({
-                        'exito': False,
-                        'error': f'No se pudieron descargar los subtítulos: {str(download_error)}',
-                        'video_id': video_id
-                    }), 500
-            
-            # Intenta parsear según el formato
-            if formato_usado == 'json3':
+            # Intenta JSON3
+            if 'events' in sub_data or '"events"' in sub_data:
                 texto = parsear_json3(sub_data)
-                if texto:
-                    print(f"✅ JSON3 parseado: {len(texto)} caracteres")
             
-            if not texto and (formato_usado == 'srv3' or formato_usado == 'ttml'):
+            # Intenta XML/SRV3
+            if not texto and ('<text' in sub_data or '<?xml' in sub_data):
                 texto = parsear_srv3(sub_data)
-                if texto:
-                    print(f"✅ SRV3/TTML parseado: {len(texto)} caracteres")
             
-            if not texto and formato_usado == 'vtt':
+            # Intenta VTT
+            if not texto and 'WEBVTT' in sub_data:
                 texto = parsear_vtt(sub_data)
-                if texto:
-                    print(f"✅ VTT parseado: {len(texto)} caracteres")
             
-            # Si no funcionó ningún parser específico, limpia genéricamente
+            # Limpieza genérica
             if not texto:
-                print("⚠️ Usando limpieza genérica")
                 texto = limpiar_texto_subtitulos(sub_data)
-                if texto:
-                    print(f"✅ Limpieza genérica: {len(texto)} caracteres")
             
-            # Validación final
             if not texto or len(texto) < 10:
-                print(f"❌ Texto final muy corto o vacío: '{texto[:100] if texto else 'None'}'")
                 return jsonify({
                     'exito': False,
                     'error': 'Los subtítulos están vacíos o no se pudieron parsear',
                     'video_id': video_id,
-                    'formato': formato_usado,
-                    'debug_primeros_caracteres': sub_data[:500],
-                    'debug_tamaño': len(sub_data)
+                    'tipo': tipo,
+                    'debug_tamaño': len(sub_data),
+                    'debug_inicio': sub_data[:200] if sub_data else None
                 }), 404
             
-            print(f"✅ Transcripción obtenida ({tipo}, {idioma_usado}, {formato_usado}): {len(texto)} caracteres")
+            print(f"✅ Transcripción obtenida ({tipo}, {idioma_usado}): {len(texto)} caracteres")
             
             return jsonify({
                 'exito': True,
@@ -287,14 +276,13 @@ def obtener_transcripcion():
                 'transcripcion': texto,
                 'total_caracteres': len(texto),
                 'tipo_subtitulos': tipo,
-                'idioma': idioma_usado,
-                'formato': formato_usado
+                'idioma': idioma_usado
             })
         
     except Exception as error:
-        print(f"❌ Error: {type(error).__name__}: {str(error)}")
+        print(f"❌ Error completo: {type(error).__name__}: {str(error)}")
         import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({
             'exito': False,
             'error': f'{type(error).__name__}: {str(error)}',
