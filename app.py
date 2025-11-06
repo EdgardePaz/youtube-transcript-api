@@ -84,7 +84,7 @@ def obtener_subtitulos_rapidapi(video_id):
     """Obtiene subtítulos usando RapidAPI"""
     import requests
     
-    url = "https://youtube-transcriptor.p.rapidapi.com/transcript"
+    url = "https://youtube-transcript3.p.rapidapi.com/api/transcript?videoId=ZacjOVVgoLY"
     
     querystring = {
         "video_id": video_id,
@@ -92,8 +92,8 @@ def obtener_subtitulos_rapidapi(video_id):
     }
     
     headers = {
-        "X-RapidAPI-Key": "PEGA_TU_API_KEY_AQUI",  # <-- REEMPLAZA CON TU API KEY
-        "X-RapidAPI-Host": "youtube-transcriptor.p.rapidapi.com"
+        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # <-- REEMPLAZA CON TU API KEY
+        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"
     }
     
     try:
