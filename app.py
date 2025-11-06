@@ -73,14 +73,41 @@ def parsear_json3(data):
         json_data = json.loads(data)
         textos = []
         
-        for event in json_data.get('events', []):
-            if 'segs' in event:
-                for seg in event['segs']:
-                    if 'utf8' in seg:
-                        textos.append(seg['utf8'])
+        # Intenta diferentes estructuras de JSON3
+        if 'events' in json_data:
+            for event in json_data.get('events', []):
+                # Estructura con segs
+                if 'segs' in event:
+                    for seg in event['segs']:
+                        if 'utf8' in seg:
+                            textos.append(seg['utf8'])
+                # Estructura directa con texto
+                elif 'text' in event:
+                    textos.append(event['text'])
         
-        return ' '.join(textos)
-    except:
+        # Si no encontró nada, busca recursivamente
+        if not textos:
+            def extraer_texto_recursivo(obj):
+                if isinstance(obj, dict):
+                    for key, value in obj.items():
+                        if key in ['utf8', 'text', 'simpleText']:
+                            if isinstance(value, str):
+                                textos.append(value)
+                        else:
+                            extraer_texto_recursivo(value)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        extraer_texto_recursivo(item)
+            
+            extraer_texto_recursivo(json_data)
+        
+        texto_final = ' '.join(textos)
+        # Limpia caracteres especiales de YouTube
+        texto_final = texto_final.replace('\n', ' ')
+        texto_final = re.sub(r'\s+', ' ', texto_final)
+        return texto_final.strip()
+    except Exception as e:
+        print(f"❌ Error parseando JSON3: {e}")
         return None
 
 def parsear_srv3(data):
@@ -184,31 +211,50 @@ def obtener_transcripcion():
                 sub_url = sub_list[0]['url']
                 formato_usado = sub_list[0].get('ext', 'desconocido')
             
-            # Descarga subtítulos
+                        # Descarga subtítulos
             import urllib.request
             print(f"📥 Descargando subtítulos formato: {formato_usado}")
+            print(f"🔗 URL: {sub_url[:100]}...")
+            
             response = urllib.request.urlopen(sub_url)
             sub_data = response.read().decode('utf-8')
+            
+            print(f"📄 Tamaño de datos descargados: {len(sub_data)} bytes")
+            print(f"🔍 Primeros 200 caracteres: {sub_data[:200]}")
             
             # Intenta parsear según el formato
             if formato_usado == 'json3':
                 texto = parsear_json3(sub_data)
-            elif formato_usado == 'srv3' or formato_usado == 'ttml':
+                if texto:
+                    print(f"✅ JSON3 parseado: {len(texto)} caracteres")
+            
+            if not texto and (formato_usado == 'srv3' or formato_usado == 'ttml'):
                 texto = parsear_srv3(sub_data)
-            elif formato_usado == 'vtt':
+                if texto:
+                    print(f"✅ SRV3/TTML parseado: {len(texto)} caracteres")
+            
+            if not texto and formato_usado == 'vtt':
                 texto = parsear_vtt(sub_data)
+                if texto:
+                    print(f"✅ VTT parseado: {len(texto)} caracteres")
             
             # Si no funcionó ningún parser específico, limpia genéricamente
             if not texto:
                 print("⚠️ Usando limpieza genérica")
                 texto = limpiar_texto_subtitulos(sub_data)
+                if texto:
+                    print(f"✅ Limpieza genérica: {len(texto)} caracteres")
             
+            # Validación final
             if not texto or len(texto) < 10:
+                print(f"❌ Texto final muy corto o vacío: '{texto[:100] if texto else 'None'}'")
                 return jsonify({
                     'exito': False,
                     'error': 'Los subtítulos están vacíos o no se pudieron parsear',
                     'video_id': video_id,
-                    'formato': formato_usado
+                    'formato': formato_usado,
+                    'debug_primeros_caracteres': sub_data[:500],
+                    'debug_tamaño': len(sub_data)
                 }), 404
             
             print(f"✅ Transcripción obtenida ({tipo}, {idioma_usado}, {formato_usado}): {len(texto)} caracteres")
