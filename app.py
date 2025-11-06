@@ -316,33 +316,7 @@ def obtener_transcripcion():
     
     try:
         print(f"📹 Obteniendo transcripción de: {video_id}")
-        
-        # TEMPORAL: Detectar si estamos en Railway y usar solo RapidAPI
-        import os
-        if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID'):
-            print("🚂 Detectado entorno Railway - usando solo RapidAPI")
-            texto_rapid, idioma_rapid, metodo_rapid = obtener_subtitulos_rapidapi(video_id)
-            
-            if texto_rapid and len(texto_rapid) > 50:
-                return jsonify({
-                    'exito': True,
-                    'video_id': video_id,
-                    'transcripcion': texto_rapid,
-                    'total_caracteres': len(texto_rapid),
-                    'tipo_subtitulos': 'API externa',
-                    'idioma': idioma_rapid,
-                    'metodo': metodo_rapid
-                })
-            else:
-                return jsonify({
-                    'exito': False,
-                    'error': 'No se pudo obtener transcripción desde RapidAPI',
-                    'video_id': video_id,
-                    'sugerencia': 'Verifica tu API Key de RapidAPI'
-                }), 404
-        
-        # Para entorno local, intenta todos los métodos
-        
+             
         # Intenta método directo primero
         print("🔄 Intentando método directo de API...")
         texto_directo, idioma, nombre_idioma = obtener_subtitulos_directo(video_id)
