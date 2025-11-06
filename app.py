@@ -79,12 +79,12 @@ def obtener_subtitulos_directo(video_id):
     except Exception as e:
         print(f"❌ Error en obtener_subtitulos_directo: {e}")
         return None, None, None
-    
+
 def obtener_subtitulos_rapidapi(video_id):
     """Obtiene subtítulos usando RapidAPI"""
     import requests
     
-    url = "https://youtube-transcript3.p.rapidapi.com/transcript"
+    url = "https://youtube-transcriptor.p.rapidapi.com/transcript"
     
     querystring = {
         "video_id": video_id,
@@ -92,13 +92,19 @@ def obtener_subtitulos_rapidapi(video_id):
     }
     
     headers = {
-        "X-RapidAPI-Key": "4db8764539mshfca57004d418dd6p1f779ajsn94d62ab586d8",  # <-- REEMPLAZA ESTO
-        "X-RapidAPI-Host": "youtube-transcript3.p.rapidapi.com"
+        "X-RapidAPI-Key": "PEGA_TU_API_KEY_AQUI",  # <-- REEMPLAZA CON TU API KEY
+        "X-RapidAPI-Host": "youtube-transcriptor.p.rapidapi.com"
     }
     
     try:
         print("🌐 Intentando con RapidAPI...")
+        print(f"🔗 URL: {url}")
+        print(f"📋 Video ID: {video_id}")
+        
         response = requests.get(url, headers=headers, params=querystring, timeout=30)
+        
+        print(f"📡 Código de respuesta: {response.status_code}")
+        print(f"📄 Respuesta: {response.text[:200]}...")
         
         if response.status_code == 200:
             data = response.json()
@@ -256,7 +262,33 @@ def obtener_transcripcion():
     try:
         print(f"📹 Obteniendo transcripción de: {video_id}")
         
-                # Intenta método directo primero
+        # TEMPORAL: Detectar si estamos en Railway y usar solo RapidAPI
+        import os
+        if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID'):
+            print("🚂 Detectado entorno Railway - usando solo RapidAPI")
+            texto_rapid, idioma_rapid, metodo_rapid = obtener_subtitulos_rapidapi(video_id)
+            
+            if texto_rapid and len(texto_rapid) > 50:
+                return jsonify({
+                    'exito': True,
+                    'video_id': video_id,
+                    'transcripcion': texto_rapid,
+                    'total_caracteres': len(texto_rapid),
+                    'tipo_subtitulos': 'API externa',
+                    'idioma': idioma_rapid,
+                    'metodo': metodo_rapid
+                })
+            else:
+                return jsonify({
+                    'exito': False,
+                    'error': 'No se pudo obtener transcripción desde RapidAPI',
+                    'video_id': video_id,
+                    'sugerencia': 'Verifica tu API Key de RapidAPI'
+                }), 404
+        
+        # Para entorno local, intenta todos los métodos
+        
+        # Intenta método directo primero
         print("🔄 Intentando método directo de API...")
         texto_directo, idioma, nombre_idioma = obtener_subtitulos_directo(video_id)
         
@@ -298,7 +330,7 @@ def obtener_transcripcion():
         # Continúa con yt-dlp
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # Configuración mejorada para Railway
+        # Configuración mejorada
         ydl_opts = {
             'skip_download': True,
             'writesubtitles': True,
