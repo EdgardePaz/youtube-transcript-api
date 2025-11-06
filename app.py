@@ -211,16 +211,38 @@ def obtener_transcripcion():
                 sub_url = sub_list[0]['url']
                 formato_usado = sub_list[0].get('ext', 'desconocido')
             
-                        # Descarga subtítulos
+                                    # Descarga subtítulos con headers apropiados
             import urllib.request
             print(f"📥 Descargando subtítulos formato: {formato_usado}")
             print(f"🔗 URL: {sub_url[:100]}...")
             
-            response = urllib.request.urlopen(sub_url)
-            sub_data = response.read().decode('utf-8')
+            # Añade headers para simular navegador
+            req = urllib.request.Request(
+                sub_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': '*/*',
+                    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+                    'Referer': 'https://www.youtube.com/'
+                }
+            )
             
-            print(f"📄 Tamaño de datos descargados: {len(sub_data)} bytes")
-            print(f"🔍 Primeros 200 caracteres: {sub_data[:200]}")
+            try:
+                response = urllib.request.urlopen(req, timeout=30)
+                sub_data = response.read().decode('utf-8')
+            except Exception as download_error:
+                print(f"❌ Error descargando: {download_error}")
+                # Intenta con requests como alternativa
+                try:
+                    import requests
+                    response = requests.get(sub_url, timeout=30)
+                    sub_data = response.text
+                except:
+                    return jsonify({
+                        'exito': False,
+                        'error': f'No se pudieron descargar los subtítulos: {str(download_error)}',
+                        'video_id': video_id
+                    }), 500
             
             # Intenta parsear según el formato
             if formato_usado == 'json3':
